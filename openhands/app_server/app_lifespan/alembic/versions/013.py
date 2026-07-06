@@ -23,20 +23,33 @@ def upgrade() -> None:
     (idle, running, paused, finished, error, stuck, deleting) for
     org-wide dashboard queries without requiring agent server calls.
     """
-    with op.batch_alter_table('conversation_metadata') as batch_op:
-        batch_op.add_column(
-            sa.Column(
-                'execution_status',
-                sa.String(),
-                nullable=True,
+    import sqlalchemy as sa
+    from alembic import context
+
+    # Check if column already exists (model may have created it)
+    bind = context.get_bind()
+    inspector = sa.inspect(bind)
+    columns = {col['name'] for col in inspector.get_columns('conversation_metadata')}
+
+    if 'execution_status' not in columns:
+        with op.batch_alter_table('conversation_metadata') as batch_op:
+            batch_op.add_column(
+                sa.Column(
+                    'execution_status',
+                    sa.String(),
+                    nullable=True,
+                )
             )
-        )
-        # Create index for efficient dashboard queries
-        batch_op.create_index(
-            'ix_conversation_metadata_execution_status',
-            'execution_status',
-            unique=False,
-        )
+
+    # Create index if not exists
+    indexes = {idx['name'] for idx in inspector.get_indexes('conversation_metadata')}
+    if 'ix_conversation_metadata_execution_status' not in indexes:
+        with op.batch_alter_table('conversation_metadata') as batch_op:
+            batch_op.create_index(
+                'ix_conversation_metadata_execution_status',
+                ['execution_status'],
+                unique=False,
+            )
 
 
 def downgrade() -> None:
